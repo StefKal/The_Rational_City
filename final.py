@@ -5,8 +5,8 @@ import matplotlib.animation as animation
 SIZE = 100
 INDI_MONEY = 1000
 CORP_MONEY = 10000
-INDI_VISION = 10
-CORP_VISION = 10
+INDI_VISION = 100
+CORP_VISION = 100
 STATUS = 100
 
 # construction of a corporation agent
@@ -169,33 +169,30 @@ def inhabit(city):
 
     # I N I T I A L  I N H A B I T A T I O N
     while len(individuals) < (SIZE*SIZE)/4:
-        ind = Individual(randint(0, INDI_MONEY),INDI_VISION)
+        ind = Individual(randint(0, INDI_MONEY), randint(0,INDI_VISION))
         for coord in city.city_indCells:
             cell = city.city_indCells[coord]
             if not cell.occupied:
-                    if ind.money > cell.rent and cell != GovCell and cell.occupied == False and cell.agent_inside is None:
-                        cell.agent_inside = ind
-                        cell.occupied = True
-                        individuals.append(ind)
-                        break
-                    # else:
-                    #     for govcell in city.grid[0:10]:
-                    #         if not govcell.occupied and isinstance(govcell, GovCell):
-                    #             govcell.agent_inside = ind
-                    #             break
-                    #     break
+                if ind.money > cell.rent and cell != GovCell and cell.occupied == False and cell.agent_inside is None:
+                    cell.agent_inside = ind
+                    cell.occupied = True
+                    individuals.append(ind)
+                    break
+
+
 
 
     while len(corporations) < (SIZE * SIZE) / 4:
-        corp = Corporation(randint(0, CORP_MONEY), CORP_VISION)
+        corp = Corporation(randint(0, CORP_MONEY), randint(0,CORP_VISION))
         for coord in city.city_corpCells:
             cell = city.city_corpCells[coord]
             if not cell.occupied:
-                    if corp.money > cell.rent and cell.occupied == False and cell.agent_inside is None:
-                        cell.agent_inside = corp
-                        cell.occupied = True
-                        corporations.append(corp)
-                        break
+                if corp.money > cell.rent and cell.occupied == False and cell.agent_inside is None:
+                    cell.agent_inside = corp
+                    cell.occupied = True
+                    corporations.append(corp)
+                    break
+
 
 def put_status(city):
     for row in range(1,SIZE-1):
@@ -231,7 +228,7 @@ def update(city):
 
                 cost = find_distance_cost(current_cell.x, best_cell.x, current_cell.y, best_cell.y)
                 # if its not their current cell, and they can afford the movement cost and 2 times the rent of the place then move
-                if best_cell != current_cell and agent_inside.money - cost > 0 and agent_inside.money > 2*best_cell.rent:
+                if best_cell != current_cell and agent_inside.money - cost > 0 and agent_inside.money > 2*best_cell.rent and (not isinstance(best_cell, GovCell)):
                     cell.occupied = False
                     agent_inside.money -= cost
                     cell.agent_inside = None
@@ -249,6 +246,7 @@ def update(city):
 
 
 
+
 def test():
     # our city
     city = City(SIZE,SIZE)
@@ -258,19 +256,30 @@ def test():
     inhabit(city)
 
     ims = []
+    means = []
     fig = plt.figure()
+
     # G A M E  L O O P
-    for period in range(100):
+    for period in range(20):
         # INCREASE UPDATE AGENTS INSIDE CITY BASED ON THE CELL THEY ARE IN
+        evicted = 0
+
         for cell in city:
             agent_inside = cell.agent_inside
             if cell.occupied:
-                # calculate their money by half as interest
-                money_added = agent_inside.money* 1/2
-                # increase their money by how much the status of their cell is
-                money_added = money_added + agent_inside.money * cell.status
-                # adds and subtracts money based on rent/status
-                agent_inside.run(money_added, cell.rent)
+                if cell.agent_inside.money > 10000000:
+                    cell.agent_inside.money = 10000000
+                else:
+                    # calculate their money by half as interest
+                    money_added = agent_inside.money * 1 / 10
+                    # increase their money by how much the status of their cell is
+                    money_added = money_added + agent_inside.money * cell.status
+                    # adds and subtracts money based on rent/status
+                    roll_the_die = randint(0, 1)
+                    if roll_the_die < 0.2:
+                        money_added = 0
+                    agent_inside.run(money_added, cell.rent)
+
                 if cell.rent > agent_inside.money and isinstance(agent_inside, Individual):
                     for coord in city.city_govCells:
                         govcell = city.city_govCells[coord]
@@ -278,17 +287,45 @@ def test():
                             govcell.agent_inside = agent_inside
                     cell.occupied = False
                     cell.agent_inside = None
+                    evicted+= 1
+                if cell.rent > agent_inside.money and isinstance(agent_inside, Corporation):
+                    cell.agent_inside = None
+                    cell.occupied = False
+                    evicted += 1
 
 
-        occupancy = city_occupancy(city)
+        print("evicted:", evicted)
+
+
+        # call city occupancy function and save it in "occupancy" variable
+        occupancy = city_money(city)
+        # plot the occupancy variable
         im = plt.imshow(occupancy, animated = True)
         ims.append([im])
-        #display(city)
+        i_mean, c_mean = mean_wealth(city)
+        means.append(i_mean)
+        print("individual mean wealth",i_mean, "period", period)
+        print("corporation mean wealth",c_mean, "period", period)
+
+        print("individual standard dev", std_dev(city, i_mean), "period", period)
+        print("corporation standard dev", std_dev(city, c_mean), "period", period)
         update(city)
     ani = animation.ArtistAnimation(fig, ims, interval=100, blit=True, repeat_delay=100)
     plt.colorbar()
     plt.show()
+
+    plt.title("Mean wealth")
+    plt.xlabel('period')
+    plt.ylabel('mean wealth of the city')
+    plt.plot(np.arange(0,20), means)
+    plt.show()
+
+
 # returns a city map with either 1 if cell is occupied or 0 if its not
+
+# ***************************
+# HELPER FUNCTIONS BELOW HERE
+# ***************************
 
 def city_occupancy(city):
     occupancy = [[[] for x in range(SIZE)] for x in range(SIZE)]
@@ -312,8 +349,52 @@ def city_money(city):
                 money[i][j] = 0
     return money
 
+def city_status(city):
+    status = [[[] for x in range(SIZE)] for x in range(SIZE)]
+    for i in range(SIZE):
+        for j in range(SIZE):
+            status[i][j] = city.grid[i][j].status
+    return status
+
+def individal_or_corp(city):
+    mapping = [[[] for x in range(SIZE)] for x in range(SIZE)]
+    for i in range(SIZE):
+        for j in range(SIZE):
+            if city.grid[i][j].occupied:
+                if isinstance(city.grid[i][j].agent_inside, Individual):
+                    mapping[i][j] = 1
+                else:
+                    mapping[i][j] = 0.5
+            else:
+                mapping[i][j] = 0
+    return mapping
+
+
+def mean_wealth(city):
+    indi_wealth = 0
+    corp_wealth = 0
+    for i in range(SIZE):
+        for j in range(SIZE):
+            if city.grid[i][j].occupied and isinstance(city.grid[i][j], IndCell):
+                indi_wealth += city.grid[i][j].agent_inside.money
+            elif city.grid[i][j].occupied and isinstance(city.grid[i][j], CorpCell):
+                corp_wealth += city.grid[i][j].agent_inside.money
+    i_mean = indi_wealth/((SIZE*SIZE)/2)
+    c_mean = corp_wealth/((SIZE*SIZE)/2)
+    return i_mean, c_mean
+
+def std_dev(city, mean):
+    result = []
+    for i in range(SIZE):
+        for j in range(SIZE):
+            if city.grid[i][j].occupied:
+                result.append((city.grid[i][j].agent_inside.money - mean)**2)
+    std_mean = np.mean(result)
+
+    return np.sqrt(std_mean)
+
 def find_distance_cost(x1, x2, y1, y2):
-    return np.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1))
+    return 1000*np.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1))
 
 # Helper function that displays the city in the console
 def display(city):
