@@ -237,11 +237,11 @@ def update(city):
                     agent_inside.optimal = False
 
 
-                elif isinstance(best_cell, GovCell):
-                    agent_inside.optimal = False
-                # if they cannot find a better cell that means that they are at their optimal cell
-                else:
-                    agent_inside.optimal = True
+                    if isinstance(best_cell, GovCell):
+                        agent_inside.optimal = False
+                    # if they cannot find a better cell that means that they are at their optimal cell
+                    else:
+                        agent_inside.optimal = True
 
 
 
@@ -256,18 +256,28 @@ def test():
     inhabit(city)
 
     ims = []
+
     means = []
+    evictions = []
+    gov_occupancies = []
     fig = plt.figure()
 
+
     # G A M E  L O O P
-    for period in range(20):
+    for period in range(50):
         # INCREASE UPDATE AGENTS INSIDE CITY BASED ON THE CELL THEY ARE IN
         evicted = 0
+        gov_occupancy = 0
+
 
         for cell in city:
+            if isinstance(cell, GovCell) and cell.occupied:
+                gov_occupancy += 1
+
+
             agent_inside = cell.agent_inside
             if cell.occupied:
-                if cell.agent_inside.money > 10000000:
+                if isinstance(cell.agent_inside, Corporation) and cell.agent_inside.money > 10000000:
                     cell.agent_inside.money = 10000000
                 else:
                     # calculate their money by half as interest
@@ -293,15 +303,19 @@ def test():
                     cell.occupied = False
                     evicted += 1
 
-
+        print("GOV OCCUPANCY" ,gov_occupancy)
+        gov_occupancies.append(gov_occupancy)
         print("evicted:", evicted)
+        evictions.append(evicted)
 
 
         # call city occupancy function and save it in "occupancy" variable
-        occupancy = city_money(city)
+        occupancy = city_occupancy(city)
         # plot the occupancy variable
-        im = plt.imshow(occupancy, animated = True)
+        im = plt.imshow(occupancy)
         ims.append([im])
+
+
         i_mean, c_mean = mean_wealth(city)
         means.append(i_mean)
         print("individual mean wealth",i_mean, "period", period)
@@ -310,14 +324,30 @@ def test():
         print("individual standard dev", std_dev(city, i_mean), "period", period)
         print("corporation standard dev", std_dev(city, c_mean), "period", period)
         update(city)
+
+
+
     ani = animation.ArtistAnimation(fig, ims, interval=100, blit=True, repeat_delay=100)
     plt.colorbar()
-    plt.show()
+    plt.show(ani)
+    plt.close(fig)
 
     plt.title("Mean wealth")
     plt.xlabel('period')
     plt.ylabel('mean wealth of the city')
-    plt.plot(np.arange(0,20), means)
+    plt.plot(np.arange(0,50), means)
+    plt.show()
+
+    plt.title("Evictions")
+    plt.xlabel('period')
+    plt.ylabel('evictions happened that period')
+    plt.plot(np.arange(0, 50), evictions)
+    plt.show()
+
+    plt.title("Government Cell Occupancy")
+    plt.xlabel('period')
+    plt.ylabel('Occupancy that period')
+    plt.plot(np.arange(0, 50), gov_occupancies)
     plt.show()
 
 
